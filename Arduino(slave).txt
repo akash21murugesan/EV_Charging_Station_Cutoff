@@ -1,0 +1,83 @@
+#include <HardwareSerial.h>
+
+#define RS485_DE_RE_PIN     7     // RS485 DE/RE control pin
+#define RELAY_PIN           6     // Relay control pin
+#define VOLTAGE_SENSOR_PIN  A9    // Voltage sensor
+#define CURRENT_SENSOR_PIN  A8    // ACS712 current sensor
+
+/*******************************************************
+ *  Sensor Calibration Constants
+ *******************************************************/
+#define VOLTAGE_DIVIDER_RATIO    5.0  
+#define VOLTAGE_OFFSET           0.25  
+#define CURRENT_SENSOR_OFFSET    2.50
+#define CURRENT_SENSOR_SENSITIVITY  0.100
+#define NUM_SAMPLES 100  
+#define CURRENT_MULTIPLIER 2.5  // Adjusted multiplier
+
+void setup() {
+    Serial.begin(115200);
+    Serial1.begin(9600, SERIAL_8N1);  // RS485 communication on Serial1
+    
+    pinMode(RS485_DE_RE_PIN, OUTPUT);
+    digitalWrite(RS485_DE_RE_PIN, LOW);  // Start in receive mode
+    
+    pinMode(RELAY_PIN, OUTPUT);
+    digitalWrite(RELAY_PIN, HIGH);  // Start with relay OFF initially
+
+    Serial.println("Arduino Mega RS485 Ready...");
+}
+
+void loop() {
+    // Check for incoming data on RS485 (from ESP32)
+    if (Serial1.available()) {
+        char command = Serial1.read();
+        if (command == '0') {
+            digitalWrite(RELAY_PIN, LOW);  // Relay ON
+            Serial.println("Relay ON (Received from ESP32)");
+        } 
+        else if (command == '1') {
+            digitalWrite(RELAY_PIN, HIGH); // Relay OFF
+            Serial.println("Relay OFF (Received from ESP32)");
+        }
+    }
+    
+    float current = getAverageCurrent();
+    float voltage = getVoltageReading();
+    
+    // Turn ON the relay if current is ≤ 0.32A
+    if (current <= 0.32) {
+        digitalWrite(RELAY_PIN, LOW);  // Relay ON
+        Serial.println("Current too low! Relay ON");
+    }
+
+    // Print voltage and current readings
+    Serial.print("Voltage: "); Serial.print(voltage, 2); Serial.print(" V | ");
+    Serial.print("Current: "); Serial.print(current, 2); Serial.println(" A");
+
+    delay(500);
+}
+
+// Function to get accurate current reading
+float getAverageCurrent() {
+    float totalCurrent = 0.0;
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+        int currentRaw = analogRead(CURRENT_SENSOR_PIN);
+        float sensorVoltage = (currentRaw * 5.0) / 1023.0;
+        float current = (sensorVoltage - CURRENT_SENSOR_OFFSET) / CURRENT_SENSOR_SENSITIVITY;
+        totalCurrent += current;
+        delay(1);
+    }
+    float averageCurrent = totalCurrent / NUM_SAMPLES;
+    if (averageCurrent < 0) {
+        averageCurrent = -averageCurrent;
+    }
+    averageCurrent *= CURRENT_MULTIPLIER;
+    return (fabs(averageCurrent) < 0.03) ? 0.0 : averageCurrent;
+}
+
+// Function to get voltage reading
+float getVoltageReading() {
+    int voltageRaw = analogRead(VOLTAGE_SENSOR_PIN);
+    return (voltageRaw * 5.0 / 1023.0) * VOLTAGE_DIVIDER_RATIO - VOLTAGE_OFFSET;
+}

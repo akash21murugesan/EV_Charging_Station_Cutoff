@@ -1,0 +1,47 @@
+#define BLYNK_TEMPLATE_ID "TMPL3pDg_WZcm"
+#define BLYNK_TEMPLATE_NAME "LandT Project"
+
+#include <BlynkSimpleEsp32.h>
+#include <HardwareSerial.h>
+
+char auth[] = "ZKnBiFkH-wwiYPBkwThhLqzpjuRR6-06"; // Your Blynk Auth Token
+char ssid[] = "Redmi K50i";  // Your WiFi SSID
+char pass[] = "dy8upmtkpsfbw4q";    // Your WiFi Password
+
+HardwareSerial RS485Serial(1);  // Using Serial1 for RS485
+
+#define RS485_DE_RE_PIN  4  // RS485 DE/RE pin
+
+BlynkTimer timer;
+
+// Function to control relay via RS485
+BLYNK_WRITE(V2) {
+    int relayState = param.asInt();
+    digitalWrite(RS485_DE_RE_PIN, HIGH);
+    delay(50);  // Increased delay to stabilize transmission
+    if (relayState == 1) {
+        RS485Serial.write('0');  // Relay ON
+        Serial.println("Relay ON Command Sent");
+    } else {
+        RS485Serial.write('1');  // Relay OFF
+        Serial.println("Relay OFF Command Sent");
+    }
+    delay(50);
+    digitalWrite(RS485_DE_RE_PIN, LOW);
+}
+
+void setup() {
+    Serial.begin(115200);
+    RS485Serial.begin(9600, SERIAL_8N1, 16, 17);  // RX=16, TX=17
+    pinMode(RS485_DE_RE_PIN, OUTPUT);
+    digitalWrite(RS485_DE_RE_PIN, LOW);
+    
+    Blynk.begin(auth, ssid, pass);
+
+    Serial.println("ESP32 RS485 Ready...");
+}
+
+void loop() {
+    Blynk.run();
+    timer.run();
+}
